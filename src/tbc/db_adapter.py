@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -18,6 +19,7 @@ class User(Base):
     last_name = Column(String)
     name = Column(String)
     username = Column(String)
+    created_at = Column(Integer)
 
 
 class DbAdapter:
@@ -58,6 +60,7 @@ class DbAdapter:
             user.last_name = eff_user.last_name
             user.name = eff_user.name
             user.username = eff_user.username
+            user.created_at = int(datetime.timestamp(datetime.now()))
             self.session.add(user)
             self.session.commit()
         return user

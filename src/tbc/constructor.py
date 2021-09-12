@@ -2,6 +2,7 @@ import logging
 import re
 
 from telegram.ext import CallbackQueryHandler, Filters, MessageHandler, Updater
+from telegram.ext.callbackcontext import CallbackContext
 from transitions import Machine, State
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,8 @@ class Constructor:
     """
     START_STATE_NAME = '__start__'
     FREE_TEXT_TRIGGER = '__free_text__'
+    PHOTO_TRIGGER = '__free_text__'
+
     PASSING_TRIGGER = '__passing_trigger__'
 
     def __init__(self, token, db_adapter):
@@ -36,7 +39,7 @@ class Constructor:
         self.updater = Updater(self.token)
         self.dispatcher = self.updater.dispatcher
 
-    def __handler(self, bot, update, trigger):
+    def __handler(self, context:CallbackContext, update, trigger):
         """
         Handler method which is activated when bot receives message (or another type of input) from user. This method
             deals with self.db_adapter: takes the current user's state from db -> set this state to state machine ->
@@ -47,7 +50,7 @@ class Constructor:
         user_id = eff_user.id
         logger.info('Handling user with id: {}'.format(user_id))
         self.user = self.db_adapter.get_user(eff_user=eff_user)
-        self.bot = bot
+        self.context = context
         self.update = update
         self.user.state = Constructor.START_STATE_NAME if not self.user.state else self.user.state
 
@@ -87,12 +90,19 @@ class Constructor:
         trigger = update.message.text
         self.__handler(bot, update, trigger)
 
-    def __clb_handler(self, update, bot):
+    def __photo_handler(self, update, context):
+        """
+        Executes self.__handler if bot receives photo from user
+        """
+        trigger = Constructor.PHOTO_TRIGGER
+        self.__handler(context, update, trigger)
+
+    def __clb_handler(self, update, context):
         """
         Executes self.__handler if bot receives callback data from user
         """
         trigger = update.callback_query.data
-        self.__handler(bot, update, trigger)
+        self.__handler(context, update, trigger)
 
     def add_state(self, name, on_enter=None, on_exit=None):
         """
@@ -122,6 +132,8 @@ class Constructor:
 
         dp.add_handler(MessageHandler(Filters.text, self.__msg_handler))
         dp.add_handler(MessageHandler(Filters.command, self.__msg_handler))
+        dp.add_handler(MessageHandler(Filters.photo, self.__photo_handler))
+
         dp.add_handler(CallbackQueryHandler(callback=self.__clb_handler))
 
         self.updater.start_polling()

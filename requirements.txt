@@ -1,5 +1,4 @@
 SQLAlchemy
-python-telegram-bot==6.1.0
+python-telegram-bot==13.7
 PyYAML
 transitions
-blockchain

@@ -17,7 +17,6 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     name = Column(String)
-    type = Column(String)
     username = Column(String)
 
 
@@ -58,7 +57,6 @@ class DbAdapter:
             user.first_name = eff_user.first_name
             user.last_name = eff_user.last_name
             user.name = eff_user.name
-            user.type = eff_user.type
             user.username = eff_user.username
             self.session.add(user)
             self.session.commit()

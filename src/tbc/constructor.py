@@ -1,9 +1,8 @@
 import logging
 import re
 
-from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import CallbackQueryHandler, Filters, MessageHandler, Updater
 from transitions import Machine, State
-from transitions.extensions import GraphMachine
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +33,8 @@ class Constructor:
         self.states = []
         self.transitions = []
         self.db_adapter = db_adapter
+        self.updater = Updater(self.token)
+        self.dispatcher = self.updater.dispatcher
 
     def __handler(self, bot, update, trigger):
         """
@@ -79,14 +80,14 @@ class Constructor:
         if Constructor.PASSING_TRIGGER in self.machine.get_triggers(self.state):
             self.__handler(self, update, Constructor.PASSING_TRIGGER)
 
-    def __msg_handler(self, bot, update):
+    def __msg_handler(self, update, bot):
         """
         Executes self.__handler if bot receives text from user
         """
         trigger = update.message.text
         self.__handler(bot, update, trigger)
 
-    def __clb_handler(self, bot, update):
+    def __clb_handler(self, update, bot):
         """
         Executes self.__handler if bot receives callback data from user
         """
@@ -117,12 +118,11 @@ class Constructor:
         Execute this method when bot is ready
         """
 
-        updater = Updater(self.token)
-        dp = updater.dispatcher
+        dp = self.dispatcher
 
         dp.add_handler(MessageHandler(Filters.text, self.__msg_handler))
         dp.add_handler(MessageHandler(Filters.command, self.__msg_handler))
         dp.add_handler(CallbackQueryHandler(callback=self.__clb_handler))
 
-        updater.start_polling()
-        updater.idle()
+        self.updater.start_polling()
+        self.updater.idle()

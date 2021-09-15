@@ -22,6 +22,18 @@ class User(Base):
     created_at = Column(Integer)
 
 
+    def __init__(self, state:str, first_name:str, 
+                last_name:str, name:str, username:str, created_at:int):
+        self.state = state
+        self.first_name = first_name
+        self.last_name = last_name
+        self.name = name
+        self.username = username
+        self.created_at = created_at
+        
+         
+
+
 class DbAdapter:
     """
     Class which deals with users' states db. This is the original handler class, but the custom class could be inherited
@@ -52,17 +64,19 @@ class DbAdapter:
         """
         user_id = eff_user.id
 
-        user = self.session.query(self.user_class).filter(self.user_class.id == user_id).one_or_none()
-        if not user:
-            user = self.user_class()
-            user.id = user_id
-            user.first_name = eff_user.first_name
-            user.last_name = eff_user.last_name
-            user.name = eff_user.name
-            user.username = eff_user.username
-            user.created_at = int(datetime.timestamp(datetime.now()))
-            self.session.add(user)
-            self.session.commit()
+        with self.Session() as session:
+            user = session.query(self.user_class).filter(self.user_class.id == user_id).one_or_none()
+            if not user:
+                user = self.user_class()
+                user.id = user_id
+                user.first_name = eff_user.first_name
+                user.last_name = eff_user.last_name
+                user.name = eff_user.name
+                user.username = eff_user.username
+                user.created_at = int(datetime.timestamp(datetime.now()))
+                session.add(user)
+            session.expunge(user)
+            session.commit()
         return user
 
     def commit_user(self, user):
@@ -71,9 +85,12 @@ class DbAdapter:
         :param user: user object
 
         :type user: User
-        """
-        self.session.add(user)
-        self.session.commit()
+        """ 
+        with self.Session() as session:
+            session.add(user)
+            session.commit()
+            session.close()
+        
 
     def init_db(self):
         """

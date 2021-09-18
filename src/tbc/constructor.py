@@ -1,25 +1,31 @@
 import logging
 import re
+from typing import List
 
 from telegram.ext import CallbackQueryHandler, Filters, MessageHandler, Updater
 from telegram.ext.callbackcontext import CallbackContext
+from telegram.ext.dispatcher import Dispatcher
+from telegram.update import Update
 from transitions import Machine, State
+from transitions.core import Transition
+
+from tbc.db_adapter import DbAdapter
 
 logger = logging.getLogger(__name__)
 
 
 class Constructor:
     """
-    Main bot constructor class, which contains many operational fields: bot (telegram), update (telegram), 
+    Main bot constructor class, which contains many operational fields: bot (telegram), update (telegram),
     state-machine fields, db_adapter for handling users' states and so on
     """
     START_STATE_NAME = '__start__'
     FREE_TEXT_TRIGGER = '__free_text__'
-    PHOTO_TRIGGER = '__free_text__'
-
+    PHOTO_TRIGGER = '__photo_trigger__'
+    LOCATION_TRIGGER = '__location_trigger__'
     PASSING_TRIGGER = '__passing_trigger__'
 
-    def __init__(self, token, db_adapter):
+    def __init__(self, token: str, db_adapter: DbAdapter):
         """
         :param token: toke of your bot (could be obtained within @BotFather in telegram).
         :param db_adapter: object of the original class DbAdapter (db_adapter.DbAdapter) or object of the inherited
@@ -28,27 +34,28 @@ class Constructor:
         :type token: str
         :type db_adapter: DbAdapter
         """
-        self.token = token
-        self.update = None
-        self.state = None
-        self.machine = None
-        self.start_state = None
-        self.states = []
-        self.transitions = []
-        self.db_adapter = db_adapter
-        self.updater = Updater(self.token)
-        self.dispatcher = self.updater.dispatcher
+        self.token: str = token
+        self.update: Update = None
+        self.state: State = None
+        self.machine: Machine = None
+        self.start_state: State = None
+        self.states: List[State] = []
+        self.transitions: List[Transition] = []
+        self.db_adapter: DbAdapter = db_adapter
+        self.updater: Updater = Updater(self.token)
+        self.dispatcher: Dispatcher = self.updater.dispatcher
 
-    def __handler(self, context:CallbackContext, update, trigger):
+    def __handler(self, context: CallbackContext, update: Update, trigger: str):
         """
-        Handler method which is activated when bot receives message (or another type of input) from user. This method
-            deals with self.db_adapter: takes the current user's state from db -> set this state to state machine ->
-            execute the related machine handler (with given state and trigger) -> update state in self.state and
-            update user's state in db
+        Handler method which is activated when bot receives message (or another type of input) from user.
+        This method uses self.db_adapter.
+            1. It takes the current user's state from database.
+            2. Then it sets this state to state machine.
+            3. Then it executes the related machine handler (with given state and trigger)
+            4. Finally it updates state in self.state and update user's state in database.
         """
         eff_user = update.effective_user
-        user_id = eff_user.id
-        logger.info('Handling user with id: {}'.format(user_id))
+        logger.info('Handling user with id: {}'.format(eff_user.id))
         self.user = self.db_adapter.get_user(eff_user=eff_user)
         self.context = context
         self.update = update
@@ -57,8 +64,12 @@ class Constructor:
         if self.machine:
             self.machine.set_state(state=self.user.state, model=self)
         else:
-            self.machine = Machine(model=self, states=self.states, initial=self.user.state,
-                                   transitions=self.transitions)
+            self.machine = Machine(
+                model=self,
+                states=self.states,
+                initial=self.user.state,
+                transitions=self.transitions
+            )
 
         triggers = self.machine.get_triggers(self.state)
         matched_triggers = []
@@ -72,8 +83,9 @@ class Constructor:
             trigger = matched_triggers[0]
         else:
             raise ValueError(
-                'Proposed trigger {} has more then one possible model\'s matched triggers: {}'.format(trigger,
-                                                                                                      matched_triggers))
+                f'Proposed trigger {trigger} has more then one possible model\'s '
+                f'matched triggers: {matched_triggers}'
+            )
 
         self.machine.model.trigger(trigger, self)
 
@@ -95,6 +107,13 @@ class Constructor:
         Executes self.__handler if bot receives photo from user
         """
         trigger = Constructor.PHOTO_TRIGGER
+        self.__handler(context, update, trigger)
+
+    def __location_handler(self, update, context):
+        """
+        Executes self.__handler if bot receives location from user
+        """
+        trigger = Constructor.LOCATION_TRIGGER
         self.__handler(context, update, trigger)
 
     def __clb_handler(self, update, context):
@@ -133,7 +152,8 @@ class Constructor:
         dp.add_handler(MessageHandler(Filters.text, self.__msg_handler))
         dp.add_handler(MessageHandler(Filters.command, self.__msg_handler))
         dp.add_handler(MessageHandler(Filters.photo, self.__photo_handler))
-
+        dp.add_handler(MessageHandler(
+            Filters.location, self.__location_handler))
         dp.add_handler(CallbackQueryHandler(callback=self.__clb_handler))
 
         self.updater.start_polling()
